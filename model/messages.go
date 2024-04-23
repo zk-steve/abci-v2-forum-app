@@ -80,7 +80,7 @@ func GetMessagesBySender(db *DB, sender string) (string, error) {
 	return messages, nil
 }
 
-// Parse Message
+// ParseMessage parse messages
 func ParseMessage(tx []byte) (*Message, error) {
 	msg := &Message{}
 

@@ -108,7 +108,7 @@ func ViewDB(db *badger.DB, key []byte) ([]byte, error) {
 	err := db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil {
-			if err != badger.ErrKeyNotFound {
+			if !errors.Is(err, badger.ErrKeyNotFound) {
 				return err
 			}
 			return nil
@@ -131,6 +131,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return ViewDB(db.db, key)
 
 }
+
 func (db *DB) GetValidators() (validators []types.ValidatorUpdate, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
