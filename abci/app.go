@@ -111,6 +111,8 @@ func (app *ForumApp) Query(ctx context.Context, query *abci.QueryRequest) (*abci
 // CheckTx handles validation of inbound transactions. If a transaction is not a valid message, or if a user
 // does not exist in the database or if a user is banned it returns an error
 func (app *ForumApp) CheckTx(_ context.Context, req *abci.CheckTxRequest) (*abci.CheckTxResponse, error) {
+	fmt.Println("Executing Application CheckTx")
+
 	// Parse the tx message
 	msg, err := model.ParseMessage(req.Tx)
 	if err != nil {
@@ -139,6 +141,7 @@ func (app *ForumApp) CheckTx(_ context.Context, req *abci.CheckTxRequest) (*abci
 
 // InitChain initializes the blockchain with information sent from CometBFT such as validators or consensus parameters
 func (app *ForumApp) InitChain(_ context.Context, req *abci.InitChainRequest) (*abci.InitChainResponse, error) {
+	fmt.Println("Executing Application InitChain")
 	for _, v := range req.Validators {
 		app.updateValidator(v)
 	}
@@ -152,7 +155,7 @@ func (app *ForumApp) InitChain(_ context.Context, req *abci.InitChainRequest) (*
 // PrepareProposal is used to prepare a proposal for the next block in the blockchain. The application can re-order, remove
 // or add transactions
 func (app *ForumApp) PrepareProposal(_ context.Context, req *abci.PrepareProposalRequest) (*abci.PrepareProposalResponse, error) {
-	fmt.Println("entered prepareProp")
+	fmt.Println("Executing Application PrepareProposal")
 
 	// Get the curse words from the vote extensions
 	voteExtensionCurseWords := app.getWordsFromVe(req.LocalLastCommit.Votes)
@@ -204,7 +207,7 @@ func (app *ForumApp) PrepareProposal(_ context.Context, req *abci.PrepareProposa
 
 // ProcessProposal validates the proposed block and the transactions and return a status if it was accepted or rejected
 func (app *ForumApp) ProcessProposal(_ context.Context, req *abci.ProcessProposalRequest) (*abci.ProcessProposalResponse, error) {
-	fmt.Println("entered processProp")
+	fmt.Println("Executing Application ProcessProposal")
 	bannedUsers := make(map[string]struct{}, 0)
 
 	finishedBanTxIdx := len(req.Txs)
@@ -238,9 +241,10 @@ func (app *ForumApp) ProcessProposal(_ context.Context, req *abci.ProcessProposa
 	return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 }
 
-// Deliver the decided block with its txs to the Application
-func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
-	fmt.Println("entered finalizeBlock")
+// FinalizeBlock Deliver the decided block to the Application
+func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.FinalizeBlockRequest) (*abci.FinalizeBlockResponse, error) {
+	fmt.Println("Executing Application FinalizeBlock")
+
 	// Iterate over Tx in current block
 	app.onGoingBlock = app.state.DB.GetDB().NewTransaction(true)
 	respTxs := make([]*abci.ExecTxResult, len(req.Txs))
@@ -292,55 +296,39 @@ func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.RequestFinalizeB
 			}
 			// Append messages to chat history
 			app.onGoingBlock.Set([]byte("history"), []byte(chatHistory))
-			// This adds the user to the DB, but the data is not committed nor persisted until Comit is called
+			// This adds the user to the DB, but the data is not committed nor persisted until Commit is called
 			respTxs[i] = &abci.ExecTxResult{Code: abci.CodeTypeOK}
 			app.state.Size++
 		}
 	}
 	app.state.Height = req.Height
 
-	response := &abci.ResponseFinalizeBlock{TxResults: respTxs, AppHash: app.state.Hash()}
+	response := &abci.FinalizeBlockResponse{TxResults: respTxs, AppHash: app.state.Hash()}
 	return response, nil
 }
 
-// Commit the state and return the application Merkle root hash
-// Here we actually write the staged transactions into the database.
-// For details on why it has to be done here, check the Crash recovery section
-// of the ABCI spec
-func (app *ForumApp) Commit(_ context.Context, commit *abci.RequestCommit) (*abci.ResponseCommit, error) {
+// Commit the application state
+func (app *ForumApp) Commit(_ context.Context, _ *abci.CommitRequest) (*abci.CommitResponse, error) {
+	fmt.Println("Executing Application Commit")
+
 	if err := app.onGoingBlock.Commit(); err != nil {
 		panic(err)
 	}
 	saveState(&app.state)
-	return &abci.ResponseCommit{}, nil
+	return &abci.CommitResponse{}, nil
 }
 
-// State Sync Connection
-// List available snapshots
-func (app *ForumApp) ListSnapshots(_ context.Context, listsnapshot *abci.RequestListSnapshots) (*abci.ResponseListSnapshots, error) {
-	return &abci.ResponseListSnapshots{}, nil
+// ExtendVote returns curse words as vote extensions
+func (app *ForumApp) ExtendVote(_ context.Context, _ *abci.ExtendVoteRequest) (*abci.ExtendVoteResponse, error) {
+	fmt.Println("Executing Application ExtendVote")
+
+	return &abci.ExtendVoteResponse{VoteExtension: []byte(app.CurseWords)}, nil
 }
 
-func (app *ForumApp) OfferSnapshot(_ context.Context, offersnapshot *abci.RequestOfferSnapshot) (*abci.ResponseOfferSnapshot, error) {
-	return &abci.ResponseOfferSnapshot{}, nil
-}
+// VerifyVoteExtension verifies the vote extensions and ensure they include the curse words
+func (app *ForumApp) VerifyVoteExtension(_ context.Context, req *abci.VerifyVoteExtensionRequest) (*abci.VerifyVoteExtensionResponse, error) {
+	fmt.Println("Executing Application VerifyVoteExtension") // Will not be called for extensions generated by this validator
 
-func (app *ForumApp) LoadSnapshotChunk(_ context.Context, loadsnapshotchunk *abci.RequestLoadSnapshotChunk) (*abci.ResponseLoadSnapshotChunk, error) {
-	return &abci.ResponseLoadSnapshotChunk{}, nil
-}
-
-func (app *ForumApp) ApplySnapshotChunk(_ context.Context, applysnapshotchunk *abci.RequestApplySnapshotChunk) (*abci.ResponseApplySnapshotChunk, error) {
-	return &abci.ResponseApplySnapshotChunk{}, nil
-}
-
-func (app *ForumApp) ExtendVote(_ context.Context, extendvote *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
-	fmt.Println("Entered extend vote")
-
-	return &abci.ResponseExtendVote{VoteExtension: []byte(app.CurseWords)}, nil
-}
-
-func (app *ForumApp) VerifyVoteExtension(_ context.Context, req *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
-	fmt.Println("Entered verify extension") // Will not be called for extensions generated by this validator
 	if _, ok := app.valAddrToPubKeyMap[string(req.ValidatorAddress)]; !ok {
 		// we do not have a validator with this address mapped; this should never happen
 		panic(fmt.Errorf("unknown validator"))
@@ -353,11 +341,30 @@ func (app *ForumApp) VerifyVoteExtension(_ context.Context, req *abci.RequestVer
 	}
 	if len(tmpCurseWordMap) < len(curseWords) {
 		// Extension repeats words
-		return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}, nil
+		return &abci.VerifyVoteExtensionResponse{Status: abci.VERIFY_VOTE_EXTENSION_STATUS_REJECT}, nil
 	}
-	return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_ACCEPT}, nil
+	return &abci.VerifyVoteExtensionResponse{Status: abci.VERIFY_VOTE_EXTENSION_STATUS_ACCEPT}, nil
 }
 
+// State Sync Connection
+
+func (app *ForumApp) ListSnapshots(_ context.Context, _ *abci.ListSnapshotsRequest) (*abci.ListSnapshotsResponse, error) {
+	return &abci.ListSnapshotsResponse{}, nil
+}
+
+func (app *ForumApp) OfferSnapshot(_ context.Context, _ *abci.OfferSnapshotRequest) (*abci.OfferSnapshotResponse, error) {
+	return &abci.OfferSnapshotResponse{}, nil
+}
+
+func (app *ForumApp) LoadSnapshotChunk(_ context.Context, _ *abci.LoadSnapshotChunkRequest) (*abci.LoadSnapshotChunkResponse, error) {
+	return &abci.LoadSnapshotChunkResponse{}, nil
+}
+
+func (app *ForumApp) ApplySnapshotChunk(_ context.Context, _ *abci.ApplySnapshotChunkRequest) (*abci.ApplySnapshotChunkResponse, error) {
+	return &abci.ApplySnapshotChunkResponse{}, nil
+}
+
+// getWordsFromVE gets the curse words from the vote extensions
 func (app *ForumApp) getWordsFromVe(voteExtensions []abci.ExtendedVoteInfo) string {
 	curseWordMap := make(map[string]int)
 	for _, vote := range voteExtensions {
