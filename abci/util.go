@@ -1,4 +1,4 @@
-package forum
+package app
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alijnmerchant21/forum-updated/model"
+	"github.com/andynog/abci2-forum-app/model"
 	"github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	cryptoencoding "github.com/cometbft/cometbft/crypto/encoding"

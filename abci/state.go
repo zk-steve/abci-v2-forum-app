@@ -1,11 +1,11 @@
-package forum
+package app
 
 import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
-	"github.com/alijnmerchant21/forum-updated/model"
+	"github.com/andynog/abci2-forum-app/model"
 	"github.com/dgraph-io/badger/v2"
 )
 

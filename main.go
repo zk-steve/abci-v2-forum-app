@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	app "github.com/andynog/abci2-forum-app/abci"
 	"log"
 	"net/http"
 	"os"
@@ -14,7 +16,6 @@ import (
 	"github.com/cometbft/cometbft/proxy"
 	"github.com/spf13/viper"
 
-	forum "github.com/alijnmerchant21/forum-updated/abci"
 	db "github.com/cometbft/cometbft-db"
 	cfg "github.com/cometbft/cometbft/config"
 	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
@@ -51,7 +52,7 @@ func main() {
 
 	dbPath := "forum-db"
 	appConfigPath := "app.toml"
-	app, err := forum.NewForumApp(dbPath, appConfigPath)
+	app, err := app.NewForumApp(dbPath, appConfigPath)
 
 	if err != nil {
 		log.Fatalf("failed to create ForumApp instance: %v", err)
@@ -75,6 +76,7 @@ func main() {
 	)
 
 	node, err := nm.NewNode(
+		context.Background(),
 		config,
 		pv,
 		nodeKey,

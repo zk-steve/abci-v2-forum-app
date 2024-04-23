@@ -1,4 +1,4 @@
-package forum
+package app
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alijnmerchant21/forum-updated/model"
+	"github.com/andynog/abci2-forum-app/model"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	cryptoproto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
@@ -73,8 +73,10 @@ func (app *ForumApp) Info(_ context.Context, info *abci.InfoRequest) (*abci.Info
 	}, nil
 }
 
-// Query blockchain
+// Query the application state for specific information
 func (app *ForumApp) Query(ctx context.Context, query *abci.QueryRequest) (*abci.QueryResponse, error) {
+	fmt.Println("Executing Application Query")
+
 	resp := abci.QueryResponse{Key: query.Data}
 
 	// Parse sender from query data
@@ -148,7 +150,7 @@ func (app *ForumApp) InitChain(_ context.Context, req *abci.InitChainRequest) (*
 	appHash := app.state.Hash()
 
 	// This parameter can also be set in the genesis file
-	req.ConsensusParams.Feature.VoteExtensionsEnableHeight = 1
+	req.ConsensusParams.Feature.VoteExtensionsEnableHeight.Value = 1
 	return &abci.InitChainResponse{ConsensusParams: req.ConsensusParams, AppHash: appHash}, nil
 }
 
