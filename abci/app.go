@@ -10,8 +10,8 @@ import (
 	"github.com/alijnmerchant21/forum-updated/model"
 
 	abci "github.com/cometbft/cometbft/abci/types"
+	cryptoproto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
 	cryptoencoding "github.com/cometbft/cometbft/crypto/encoding"
-	cryptoproto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 
 	"github.com/cometbft/cometbft/version"
 	"github.com/dgraph-io/badger/v3"
@@ -50,8 +50,8 @@ func NewForumApp(dbDir string, appConfigPath string) (*ForumApp, error) {
 
 }
 
-// Return application info
-func (app ForumApp) Info(_ context.Context, info *abci.RequestInfo) (*abci.ResponseInfo, error) {
+// Info return application information
+func (app *ForumApp) Info(_ context.Context, info *abci.InfoRequest) (*abci.InfoResponse, error) {
 
 	//Reading the validators from the DB because CometBFT expects the application to have them in memory
 	if len(app.valAddrToPubKeyMap) == 0 && app.state.Height > 0 {
@@ -64,7 +64,7 @@ func (app ForumApp) Info(_ context.Context, info *abci.RequestInfo) (*abci.Respo
 			app.valAddrToPubKeyMap[string(pubkey.Address())] = v.PubKey
 		}
 	}
-	return &abci.ResponseInfo{
+	return &abci.InfoResponse{
 		Version:         version.ABCIVersion,
 		AppVersion:      ApplicationVersion,
 		LastBlockHeight: app.state.Height,
@@ -74,8 +74,8 @@ func (app ForumApp) Info(_ context.Context, info *abci.RequestInfo) (*abci.Respo
 }
 
 // Query blockchain
-func (app ForumApp) Query(ctx context.Context, query *abci.RequestQuery) (*abci.ResponseQuery, error) {
-	resp := abci.ResponseQuery{Key: query.Data}
+func (app *ForumApp) Query(ctx context.Context, query *abci.QueryRequest) (*abci.QueryResponse, error) {
+	resp := abci.QueryResponse{Key: query.Data}
 
 	// Parse sender from query data
 	sender := string(query.Data)
@@ -108,99 +108,112 @@ func (app ForumApp) Query(ctx context.Context, query *abci.RequestQuery) (*abci.
 	return &resp, nil
 }
 
-func (app ForumApp) CheckTx(ctx context.Context, checktx *abci.RequestCheckTx) (*abci.ResponseCheckTx, error) {
+// CheckTx handles validation of inbound transactions. If a transaction is not a valid message, or if a user
+// does not exist in the database or if a user is banned it returns an error
+func (app *ForumApp) CheckTx(_ context.Context, req *abci.CheckTxRequest) (*abci.CheckTxResponse, error) {
 	// Parse the tx message
-	msg, err := model.ParseMessage(checktx.Tx)
+	msg, err := model.ParseMessage(req.Tx)
 	if err != nil {
-		fmt.Printf("failed to parse transaction message checktx: %v\n", err)
-		return &abci.ResponseCheckTx{Code: CodeTypeInvalidTxFormat, Log: "Invalid transaction format"}, nil
+		fmt.Printf("failed to parse transaction message req: %v\n", err)
+		return &abci.CheckTxResponse{Code: CodeTypeInvalidTxFormat, Log: "Invalid transaction format"}, nil
 	}
 	fmt.Println("Searching for sender ... ", msg.Sender)
 	u, err := app.state.DB.FindUserByName(msg.Sender)
 
 	if err != nil {
 		if !errors.Is(err, badger.ErrKeyNotFound) {
-			fmt.Println("problem in check tx: ", string(checktx.Tx))
-			return &abci.ResponseCheckTx{Code: CodeTypeEncodingError}, nil
+			fmt.Println("problem in check tx: ", string(req.Tx))
+			return &abci.CheckTxResponse{Code: CodeTypeEncodingError}, nil
 		}
 		fmt.Println("Not found user :", msg.Sender)
 	} else {
 		if u != nil && u.Banned {
-			return &abci.ResponseCheckTx{Code: CodeTypeBanned, Log: "User is banned"}, nil
+			return &abci.CheckTxResponse{Code: CodeTypeBanned, Log: "User is banned"}, nil
 		}
 	}
 	fmt.Println("Check tx success for ", msg.Message, " and ", msg.Sender)
-	return &abci.ResponseCheckTx{Code: CodeTypeOK}, nil
+	return &abci.CheckTxResponse{Code: CodeTypeOK}, nil
 }
 
 // Consensus Connection
-// Initialize blockchain w validators/other info from CometBFT
-func (app ForumApp) InitChain(_ context.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+
+// InitChain initializes the blockchain with information sent from CometBFT such as validators or consensus parameters
+func (app *ForumApp) InitChain(_ context.Context, req *abci.InitChainRequest) (*abci.InitChainResponse, error) {
 	for _, v := range req.Validators {
 		app.updateValidator(v)
 	}
 	appHash := app.state.Hash()
 
 	// This parameter can also be set in the genesis file
-	req.ConsensusParams.Abci.VoteExtensionsEnableHeight = 1
-	return &abci.ResponseInitChain{ConsensusParams: req.ConsensusParams, AppHash: appHash}, nil
+	req.ConsensusParams.Feature.VoteExtensionsEnableHeight = 1
+	return &abci.InitChainResponse{ConsensusParams: req.ConsensusParams, AppHash: appHash}, nil
 }
 
-func (app *ForumApp) PrepareProposal(_ context.Context, proposal *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+// PrepareProposal is used to prepare a proposal for the next block in the blockchain. The application can re-order, remove
+// or add transactions
+func (app *ForumApp) PrepareProposal(_ context.Context, req *abci.PrepareProposalRequest) (*abci.PrepareProposalResponse, error) {
 	fmt.Println("entered prepareProp")
 
-	voteExtensionCurseWords := app.getWordsFromVe(proposal.LocalLastCommit.Votes)
+	// Get the curse words from the vote extensions
+	voteExtensionCurseWords := app.getWordsFromVe(req.LocalLastCommit.Votes)
 
-	// prepare proposal puts the BanTx first, then adds the other transactions
+	// Prepare req puts the BanTx first, then adds the other transactions
 	// ProcessProposal should verify this
 	proposedTxs := make([][]byte, 0)
 	finalProposal := make([][]byte, 0)
 	bannedUsersString := make(map[string]struct{})
-	for _, tx := range proposal.Txs {
+	for _, tx := range req.Txs {
 		msg, err := model.ParseMessage(tx)
 		if err != nil {
 			continue
 		}
 		// Adding the curse words from vote extensions too
-		if !IsCurseWord(msg.Message, voteExtensionCurseWords) {
+		if !hasCurseWord(msg.Message, voteExtensionCurseWords) {
 			proposedTxs = append(proposedTxs, tx)
 		} else {
+			// If the message contains curse words then ban the user by
+			// creating a "ban transaction" and adding it to the final proposal
 			banTx := model.BanTx{UserName: msg.Sender}
 			bannedUsersString[msg.Sender] = struct{}{}
 			resultBytes, err := json.Marshal(banTx)
 			if err == nil {
 				finalProposal = append(finalProposal, resultBytes)
 			} else {
-				panic(fmt.Errorf("ban transaction failed to marshal in prepareProposal"))
+				// the ban transaction will not be included in the final proposal
+				fmt.Println("ban transaction failed to marshal in PrepareProposal")
 			}
 		}
 	}
 
-	// Need to loop again through the proposed Txs to make sure there is none left by a user that was banned after the tx was accepted
+	// Need to loop again through the proposed Txs to make sure there is none left by a user that was banned
+	// after the tx was accepted
 	for _, tx := range proposedTxs {
 		// there should be no error here as these are just transactions we have checked and added
 		msg, err := model.ParseMessage(tx)
 		if err != nil {
-			panic(err)
-		}
-		if _, ok := bannedUsersString[msg.Sender]; !ok {
-			finalProposal = append(finalProposal, tx)
+			fmt.Println("failed to parse message in PrepareProposal")
+		} else {
+			// If the user is banned then include this transaction in the final proposal
+			if _, ok := bannedUsersString[msg.Sender]; !ok {
+				finalProposal = append(finalProposal, tx)
+			}
 		}
 	}
-	return &abci.ResponsePrepareProposal{Txs: finalProposal}, nil
+	return &abci.PrepareProposalResponse{Txs: finalProposal}, nil
 }
 
-func (ForumApp) ProcessProposal(_ context.Context, processproposal *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+// ProcessProposal validates the proposed block and the transactions and return a status if it was accepted or rejected
+func (app *ForumApp) ProcessProposal(_ context.Context, req *abci.ProcessProposalRequest) (*abci.ProcessProposalResponse, error) {
 	fmt.Println("entered processProp")
 	bannedUsers := make(map[string]struct{}, 0)
 
-	finishedBanTxIdx := len(processproposal.Txs)
-	for i, tx := range processproposal.Txs {
+	finishedBanTxIdx := len(req.Txs)
+	for i, tx := range req.Txs {
 		if isBanTx(tx) {
 			var parsedBan model.BanTx
 			err := json.Unmarshal(tx, &parsedBan)
 			if err != nil {
-				return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
+				return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 			}
 			bannedUsers[parsedBan.UserName] = struct{}{}
 		} else {
@@ -209,20 +222,20 @@ func (ForumApp) ProcessProposal(_ context.Context, processproposal *abci.Request
 		}
 	}
 
-	for _, tx := range processproposal.Txs[finishedBanTxIdx:] {
+	for _, tx := range req.Txs[finishedBanTxIdx:] {
 		// From this point on, there should be no BanTxs anymore
 		// If there is one, ParseMessage will return an error as the
 		// format of the two transactions is different.
 		msg, err := model.ParseMessage(tx)
 		if err != nil {
-			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
+			return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 		}
 		if _, ok := bannedUsers[msg.Sender]; ok {
 			// sending us a tx from a banned user
-			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, nil
+			return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, nil
 		}
 	}
-	return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_ACCEPT}, nil
+	return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 }
 
 // Deliver the decided block with its txs to the Application
@@ -294,7 +307,7 @@ func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.RequestFinalizeB
 // Here we actually write the staged transactions into the database.
 // For details on why it has to be done here, check the Crash recovery section
 // of the ABCI spec
-func (app ForumApp) Commit(_ context.Context, commit *abci.RequestCommit) (*abci.ResponseCommit, error) {
+func (app *ForumApp) Commit(_ context.Context, commit *abci.RequestCommit) (*abci.ResponseCommit, error) {
 	if err := app.onGoingBlock.Commit(); err != nil {
 		panic(err)
 	}
@@ -304,29 +317,29 @@ func (app ForumApp) Commit(_ context.Context, commit *abci.RequestCommit) (*abci
 
 // State Sync Connection
 // List available snapshots
-func (ForumApp) ListSnapshots(_ context.Context, listsnapshot *abci.RequestListSnapshots) (*abci.ResponseListSnapshots, error) {
+func (app *ForumApp) ListSnapshots(_ context.Context, listsnapshot *abci.RequestListSnapshots) (*abci.ResponseListSnapshots, error) {
 	return &abci.ResponseListSnapshots{}, nil
 }
 
-func (ForumApp) OfferSnapshot(_ context.Context, offersnapshot *abci.RequestOfferSnapshot) (*abci.ResponseOfferSnapshot, error) {
+func (app *ForumApp) OfferSnapshot(_ context.Context, offersnapshot *abci.RequestOfferSnapshot) (*abci.ResponseOfferSnapshot, error) {
 	return &abci.ResponseOfferSnapshot{}, nil
 }
 
-func (ForumApp) LoadSnapshotChunk(_ context.Context, loadsnapshotchunk *abci.RequestLoadSnapshotChunk) (*abci.ResponseLoadSnapshotChunk, error) {
+func (app *ForumApp) LoadSnapshotChunk(_ context.Context, loadsnapshotchunk *abci.RequestLoadSnapshotChunk) (*abci.ResponseLoadSnapshotChunk, error) {
 	return &abci.ResponseLoadSnapshotChunk{}, nil
 }
 
-func (ForumApp) ApplySnapshotChunk(_ context.Context, applysnapshotchunk *abci.RequestApplySnapshotChunk) (*abci.ResponseApplySnapshotChunk, error) {
+func (app *ForumApp) ApplySnapshotChunk(_ context.Context, applysnapshotchunk *abci.RequestApplySnapshotChunk) (*abci.ResponseApplySnapshotChunk, error) {
 	return &abci.ResponseApplySnapshotChunk{}, nil
 }
 
-func (app ForumApp) ExtendVote(_ context.Context, extendvote *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
+func (app *ForumApp) ExtendVote(_ context.Context, extendvote *abci.RequestExtendVote) (*abci.ResponseExtendVote, error) {
 	fmt.Println("Entered extend vote")
 
 	return &abci.ResponseExtendVote{VoteExtension: []byte(app.CurseWords)}, nil
 }
 
-func (app ForumApp) VerifyVoteExtension(_ context.Context, req *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
+func (app *ForumApp) VerifyVoteExtension(_ context.Context, req *abci.RequestVerifyVoteExtension) (*abci.ResponseVerifyVoteExtension, error) {
 	fmt.Println("Entered verify extension") // Will not be called for extensions generated by this validator
 	if _, ok := app.valAddrToPubKeyMap[string(req.ValidatorAddress)]; !ok {
 		// we do not have a validator with this address mapped; this should never happen

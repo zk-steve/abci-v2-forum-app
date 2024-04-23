@@ -1,4 +1,4 @@
-temp.md
+.idea
 
 # go files
 
@@ -9,9 +9,4 @@ go.sum
 
 forum-db.db
 forum-db
-forum-updated
-
-# debug files
-
-main-from-comet
- main.go-working
+abci2-forum-app
