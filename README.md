@@ -1,33 +1,31 @@
-# Forum
+## Introduction
 
-Forum based on ABCI++
+This repository hosts the ABCI 2.0 Forum Application, which is explained in the CometBFT documentation [tutorial].
+## Forum Application
 
-## This is a Forum Application based on ABCI++
+The **ABCI 2.0 Forum Application** is a place where users can come and post messages in a forum running on a 
+blockchain powered by [CometBFT](https://github.com/cometbft/cometbft) state machine replication engine
 
-Many thanks to the original team for brainstorming and bringing forth this idea. Their original repo can be found [here](https://github.com/interchainio/forum)
+- **Users**
 
-### Simple definition
+   - Can post messages (by submitting transactions)
+   - Can view all the message history (querying the blockchain)
+   - Banned if post messages contained curse words (curse words are track with vote extensions) 
 
-The forum app is a place where users can come and post cool stuff.
+## ABCI 2.0
 
-1. **Users**
+**This application demonstrates the use of various [ABCI 2.0](https://docs.cometbft.com/v1.0/spec/abci/) methods such as:**
 
-    - Can post something.
+- PrepareProposal
+- ProcessProposal
+- FinalizeBlock
+- ExtendVote
+- VerifyVoteExtension
+- Commit
 
-    - Can view everything.
 
-2. **Moderators**
+- CheckTx
+- Query
 
-    - Everything that users can do.
+> Many thanks to the original team for brainstorming and bringing forth this idea. Their original repo can be found [here](https://github.com/interchainio/forum)
 
-    - Flag things that are *inappropriate*.
-
-    *inappropriate* - A list of curse words is maintained, can be hard coded or customized.
-
-------------------------------------------
-**The tutorial demonstrate the use of:**
-
-- Prepare Proposal
-- Process Proposal
-- Finalize Block
-- *Vote Extension*
