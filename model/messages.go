@@ -1,11 +1,11 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/pkg/errors"
+	"github.com/dgraph-io/badger/v4"
 )
 
 type BanTx struct {
@@ -25,7 +25,7 @@ type MsgHistory struct {
 func AppendToChat(db *DB, message Message) (string, error) {
 	historyBytes, err := ViewDB(db.GetDB(), []byte("history"))
 	if err != nil {
-		fmt.Println("Error fething history:", err)
+		fmt.Println("Error fetching history:", err)
 		return "", err
 	}
 	msgBytes := string(historyBytes)
@@ -36,23 +36,23 @@ func AppendToChat(db *DB, message Message) (string, error) {
 func FetchHistory(db *DB) (string, error) {
 	historyBytes, err := ViewDB(db.GetDB(), []byte("history"))
 	if err != nil {
-		fmt.Println("Error fething history:", err)
+		fmt.Println("Error fetching history:", err)
 		return "", err
 	}
 	msgHistory := string(historyBytes)
 
 	if err != nil {
-		fmt.Println("erro appending history: ", err)
+		fmt.Println("error appending history: ", err)
 	}
 	return msgHistory, err
 }
 
-func AppendToExistingMsgs(db *DB, message Message) (string, error) {
+func AppendToExistingMessages(db *DB, message Message) (string, error) {
 	existingMessages, err := GetMessagesBySender(db, message.Sender)
-	if err != nil && err != badger.ErrKeyNotFound {
+	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
 		return "", err
 	}
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		return message.Message, nil
 	}
 	return existingMessages + ";" + message.Message, nil

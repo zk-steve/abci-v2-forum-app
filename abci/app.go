@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andynog/abci2-forum-app/model"
+	"github.com/cometbft/abci-v2-forum-app/model"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	cryptoproto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
 	cryptoencoding "github.com/cometbft/cometbft/crypto/encoding"
 
 	"github.com/cometbft/cometbft/version"
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 const ApplicationVersion = 1
@@ -40,7 +40,7 @@ func NewForumApp(dbDir string, appConfigPath string) (*ForumApp, error) {
 		cfg.CurseWords = "bad"
 	}
 
-	cfg.CurseWords = DedupWords(cfg.CurseWords)
+	cfg.CurseWords = DeduplicateCurseWords(cfg.CurseWords)
 
 	return &ForumApp{
 		state:              loadState(db),
@@ -287,17 +287,23 @@ func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.FinalizeBlockReq
 				panic(err)
 			}
 			// Add the message for this sender
-			message, err := model.AppendToExistingMsgs(app.state.DB, *msg)
+			message, err := model.AppendToExistingMessages(app.state.DB, *msg)
 			if err != nil {
 				panic(err)
 			}
-			app.onGoingBlock.Set([]byte(msg.Sender+"msg"), []byte(message))
+			err = app.onGoingBlock.Set([]byte(msg.Sender+"msg"), []byte(message))
+			if err != nil {
+				panic(err)
+			}
 			chatHistory, err := model.AppendToChat(app.state.DB, *msg)
 			if err != nil {
 				panic(err)
 			}
 			// Append messages to chat history
-			app.onGoingBlock.Set([]byte("history"), []byte(chatHistory))
+			err = app.onGoingBlock.Set([]byte("history"), []byte(chatHistory))
+			if err != nil {
+				panic(err)
+			}
 			// This adds the user to the DB, but the data is not committed nor persisted until Commit is called
 			respTxs[i] = &abci.ExecTxResult{Code: abci.CodeTypeOK}
 			app.state.Size++

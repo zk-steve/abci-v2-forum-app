@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/andynog/abci2-forum-app/model"
+	"github.com/cometbft/abci-v2-forum-app/model"
 	"github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	cryptoencoding "github.com/cometbft/cometbft/crypto/encoding"
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 func isBanTx(tx []byte) bool {
@@ -84,7 +84,7 @@ func UpdateOrSetUser(db *model.DB, uname string, toBan bool, txn *badger.Txn) er
 
 }
 
-func DedupWords(inWords string) string {
+func DeduplicateCurseWords(inWords string) string {
 	curseWordMap := make(map[string]struct{})
 	for _, word := range strings.Split(inWords, "|") {
 		curseWordMap[word] = struct{}{}

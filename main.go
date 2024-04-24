@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	app "github.com/andynog/abci2-forum-app/abci"
+	app "github.com/cometbft/abci-v2-forum-app/abci"
 	"log"
 	"net/http"
 	"os"
@@ -38,7 +38,7 @@ func main() {
 
 	config := cfg.DefaultConfig()
 	config.SetRoot(homeDir)
-	viper.SetConfigFile(fmt.Sprintf("%s/%s", homeDir, "config.toml"))
+	viper.SetConfigFile(fmt.Sprintf("%s/%s", homeDir, "config/config.toml"))
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("failed to read config: %v", err)

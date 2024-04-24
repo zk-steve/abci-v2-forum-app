@@ -3,12 +3,13 @@ package model
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"strings"
 
 	"github.com/cometbft/cometbft/abci/types"
-	"github.com/dgraph-io/badger/v3"
-	"github.com/pkg/errors"
+	"github.com/dgraph-io/badger/v4"
 )
 
 type DB struct {
@@ -65,7 +66,7 @@ func (db *DB) CreateUser(user *User) error {
 	err = db.db.Update(func(txn *badger.Txn) error {
 		userBytes, err := json.Marshal(user)
 		if err != nil {
-			return errors.Wrap(err, "failed to marshal user to JSON")
+			return errors.New("failed to marshal user to JSON")
 		}
 		err = txn.Set([]byte(user.Name), userBytes)
 		if err != nil {
@@ -95,6 +96,32 @@ func (db *DB) FindUserByName(name string) (*User, error) {
 	}
 
 	return user, nil
+}
+
+func (db *DB) UpdateOrSetUser(uname string, toBan bool, txn *badger.Txn) error {
+	user, err := db.FindUserByName(uname)
+	// If user is not in the db, then add it
+	if errors.Is(err, badger.ErrKeyNotFound) {
+		u := new(User)
+		u.Name = uname
+		u.PubKey = ed25519.GenPrivKey().PubKey().Bytes()
+		u.Banned = toBan
+		user = u
+	} else {
+		if err == nil {
+			user.Banned = toBan
+		} else {
+			err = fmt.Errorf("not able to process user")
+			return err
+		}
+	}
+	userBytes, err := json.Marshal(user)
+	if err != nil {
+		fmt.Println("Error marshalling user")
+		return err
+	}
+	return txn.Set([]byte(user.Name), userBytes)
+
 }
 
 func (db *DB) Set(key, value []byte) error {

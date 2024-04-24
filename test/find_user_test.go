@@ -2,20 +2,27 @@ package test
 
 import (
 	"fmt"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/stretchr/testify/require"
 	"testing"
 
-	"github.com/alijnmerchant21/forum-updated/model"
+	"github.com/cometbft/abci-v2-forum-app/model"
 )
 
-func TestFindUserByname(t *testing.T) {
+func TestFindUserByName(t *testing.T) {
 	// Initialize the database
-	println("DB to be initialized")
-	db, err := model.NewDB("test.db")
-	println("DB initialized")
+	opts := badger.DefaultOptions("").WithInMemory(true)
+	db, err := badger.Open(opts)
+	require.NoError(t, err)
+	defer db.Close()
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 	defer db.Close()
+
+	// Create a new DB instance for testing
+	testDB := &model.DB{}
+	testDB.Init(db)
 
 	// Create some test users
 	println("User being created")
@@ -26,33 +33,16 @@ func TestFindUserByname(t *testing.T) {
 	}
 	println("User is defined")
 	for _, user := range users {
-		err := db.CreateUser(user)
+		err := testDB.CreateUser(user)
 		fmt.Println(user.Name)
 		if err != nil {
 			t.Fatalf("Failed to create user: %v", err)
 		}
 	}
 
-	// Find a user by name
-	//println("Trying to find user")
-
-	/*foundUser, err := db.FindUserByName("user5")
-	if err != nil {
-		t.Fatalf("Failed to find user: %v", err)
-	}
-
-	if foundUser == nil {
-		// t.Fatalf("Expected user2, but got %s", foundUser.Name)
-		println("USer not found")
-
-	}
-	if foundUser.Name != "" {
-		println("Expected empty name, but got %s", foundUser.Name)
-	}*/
-
 	// Verify that the correct user was returned
 	println("Trying to find user")
-	foundUser1, err1 := db.FindUserByName("user2")
+	foundUser1, err1 := testDB.FindUserByName("user2")
 	if err1 != nil {
 		t.Fatalf("Failed to find user by name: %v", err1)
 	}

@@ -3,7 +3,7 @@ package moderators
 import (
 	"bytes"
 
-	"github.com/alijnmerchant21/forum-updated/model"
+	"github.com/cometbft/abci-v2-forum-app/model"
 )
 
 type Set struct {
@@ -38,7 +38,7 @@ func (s *Set) Remove(u model.User) bool {
 			return true
 		}
 	}
-	panic("list was expected to contain pubkey but did not!")
+	panic("list was expected to contain PubKey but did not!")
 }
 
 func (s *Set) List() []model.User {

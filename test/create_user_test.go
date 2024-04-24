@@ -2,14 +2,14 @@ package test
 
 import (
 	"encoding/json"
+	"github.com/dgraph-io/badger/v4"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/alijnmerchant21/forum-updated/model"
+	"github.com/cometbft/abci-v2-forum-app/model"
 )
 
 func TestCreateUser(t *testing.T) {

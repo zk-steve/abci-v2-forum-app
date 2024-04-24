@@ -3,10 +3,11 @@ package app
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 
-	"github.com/andynog/abci2-forum-app/model"
-	"github.com/dgraph-io/badger/v2"
+	"github.com/cometbft/abci-v2-forum-app/model"
+	"github.com/dgraph-io/badger/v4"
 )
 
 type AppState struct {
@@ -27,7 +28,7 @@ func loadState(db *model.DB) AppState {
 	var state AppState
 	state.DB = db
 	stateBytes, err := db.Get([]byte(stateKey))
-	if err != nil && err != badger.ErrKeyNotFound {
+	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
 		panic(err)
 	}
 	if len(stateBytes) == 0 {
