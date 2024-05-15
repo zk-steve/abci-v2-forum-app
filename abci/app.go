@@ -42,8 +42,12 @@ func NewForumApp(dbDir string, appConfigPath string) (*ForumApp, error) {
 
 	cfg.CurseWords = DeduplicateCurseWords(cfg.CurseWords)
 
+	state, err := loadState(db)
+	if err != nil {
+		return nil, err
+	}
 	return &ForumApp{
-		state:              loadState(db),
+		state:              state,
 		valAddrToPubKeyMap: make(map[string]cryptoproto.PublicKey),
 		CurseWords:         cfg.CurseWords,
 	}, nil
@@ -55,13 +59,17 @@ func (app *ForumApp) Info(_ context.Context, info *abci.InfoRequest) (*abci.Info
 
 	//Reading the validators from the DB because CometBFT expects the application to have them in memory
 	if len(app.valAddrToPubKeyMap) == 0 && app.state.Height > 0 {
-		validators := app.getValidators()
+		validators, err := app.getValidators()
+		if err != nil {
+			return nil, err
+		}
 		for _, v := range validators {
-			pubkey, err := cryptoencoding.PubKeyFromProto(v.PubKey)
+			pubKey, err := cryptoencoding.PubKeyFromProto(v.PubKey)
 			if err != nil {
-				panic(fmt.Errorf("can't decode public key: %w", err))
+				return nil, fmt.Errorf("can't decode public key: %w", err)
 			}
-			app.valAddrToPubKeyMap[string(pubkey.Address())] = v.PubKey
+
+			app.valAddrToPubKeyMap[string(pubKey.Address())] = v.PubKey
 		}
 	}
 	return &abci.InfoResponse{
@@ -146,7 +154,10 @@ func (app *ForumApp) CheckTx(_ context.Context, req *abci.CheckTxRequest) (*abci
 func (app *ForumApp) InitChain(_ context.Context, req *abci.InitChainRequest) (*abci.InitChainResponse, error) {
 	fmt.Println("Executing Application InitChain")
 	for _, v := range req.Validators {
-		app.updateValidator(v)
+		err := app.updateValidator(v)
+		if err != nil {
+			return nil, err
+		}
 	}
 	appHash := app.state.Hash()
 
@@ -263,7 +274,7 @@ func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.FinalizeBlockReq
 			} else {
 				err := UpdateOrSetUser(app.state.DB, banTx.UserName, true, app.onGoingBlock)
 				if err != nil {
-					panic(err)
+					return nil, err
 				}
 				respTxs[i] = &abci.ExecTxResult{Code: CodeTypeOK}
 			}
@@ -285,25 +296,25 @@ func (app *ForumApp) FinalizeBlock(_ context.Context, req *abci.FinalizeBlockReq
 			// Check if this sender already existed; if not, add the user too
 			err := UpdateOrSetUser(app.state.DB, msg.Sender, false, app.onGoingBlock)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			// Add the message for this sender
 			message, err := model.AppendToExistingMessages(app.state.DB, *msg)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			err = app.onGoingBlock.Set([]byte(msg.Sender+"msg"), []byte(message))
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			chatHistory, err := model.AppendToChat(app.state.DB, *msg)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			// Append messages to chat history
 			err = app.onGoingBlock.Set([]byte("history"), []byte(chatHistory))
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 			// This adds the user to the DB, but the data is not committed nor persisted until Commit is called
 			respTxs[i] = &abci.ExecTxResult{Code: abci.CodeTypeOK}
@@ -321,9 +332,12 @@ func (app *ForumApp) Commit(_ context.Context, _ *abci.CommitRequest) (*abci.Com
 	fmt.Println("Executing Application Commit")
 
 	if err := app.onGoingBlock.Commit(); err != nil {
-		panic(err)
+		return nil, err
 	}
-	saveState(&app.state)
+	err := saveState(&app.state)
+	if err != nil {
+		return nil, err
+	}
 	return &abci.CommitResponse{}, nil
 }
 
@@ -341,7 +355,7 @@ func (app *ForumApp) VerifyVoteExtension(_ context.Context, req *abci.VerifyVote
 
 	if _, ok := app.valAddrToPubKeyMap[string(req.ValidatorAddress)]; !ok {
 		// we do not have a validator with this address mapped; this should never happen
-		panic(fmt.Errorf("unknown validator"))
+		return nil, fmt.Errorf("unknown validator")
 	}
 	curseWords := strings.Split(string(req.VoteExtension), "|")
 	tmpCurseWordMap := make(map[string]struct{})

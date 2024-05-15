@@ -18,32 +18,32 @@ func isBanTx(tx []byte) bool {
 	return strings.Contains(string(tx), "username")
 }
 
-func (app *ForumApp) getValidators() (validators []types.ValidatorUpdate) {
+func (app *ForumApp) getValidators() ([]types.ValidatorUpdate, error) {
 	var err error
-	validators, err = app.state.DB.GetValidators()
+	validators, err := app.state.DB.GetValidators()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return
+	return validators, nil
 }
 
-func (app *ForumApp) updateValidator(v types.ValidatorUpdate) {
-	pubkey, err := cryptoencoding.PubKeyFromProto(v.PubKey)
+func (app *ForumApp) updateValidator(v types.ValidatorUpdate) error {
+	pubKey, err := cryptoencoding.PubKeyFromProto(v.PubKey)
 	if err != nil {
-		panic(fmt.Errorf("can't decode public key: %w", err))
+		return fmt.Errorf("can't decode public key: %w", err)
 	}
-	key := []byte("val" + string(pubkey.Bytes()))
+	key := []byte("val" + string(pubKey.Bytes()))
 
 	// add or update validator
 	value := bytes.NewBuffer(make([]byte, 0))
 	if err := types.WriteMessage(&v, value); err != nil {
-		panic(err)
+		return err
 	}
 	if err = app.state.DB.Set(key, value.Bytes()); err != nil {
-		panic(err)
+		return err
 	}
-	app.valAddrToPubKeyMap[string(pubkey.Address())] = v.PubKey
-
+	app.valAddrToPubKeyMap[string(pubKey.Address())] = v.PubKey
+	return nil
 }
 
 func hasCurseWord(word string, curseWords string) bool {

@@ -24,33 +24,34 @@ func (s AppState) Hash() []byte {
 	return appHash
 }
 
-func loadState(db *model.DB) AppState {
+func loadState(db *model.DB) (AppState, error) {
 	var state AppState
 	state.DB = db
 	stateBytes, err := db.Get([]byte(stateKey))
 	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-		panic(err)
+		return state, nil
 	}
 	if len(stateBytes) == 0 {
-		return state
+		return state, nil
 	}
 	err = json.Unmarshal(stateBytes, &state)
 	fmt.Println("ST:", state)
 	state.DB = db
 	if err != nil {
-		panic(err)
+		return state, err
 	}
-	return state
+	return state, nil
 }
 
-func saveState(state *AppState) {
+func saveState(state *AppState) error {
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = state.DB.Set([]byte(stateKey), stateBytes)
 	fmt.Println(state)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
