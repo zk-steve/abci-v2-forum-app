@@ -27,13 +27,13 @@ import (
 var homeDir string
 
 func init() {
-	flag.StringVar(&homeDir, "cmt-home", "", "Path to the CometBFT config directory (if empty, uses $HOME/.cometbft)")
+	flag.StringVar(&homeDir, "home", "", "Path to the CometBFT config directory (if empty, uses $HOME/.forumapp)")
 }
 
 func main() {
 	flag.Parse()
 	if homeDir == "" {
-		homeDir = os.ExpandEnv("$HOME/.cometbft")
+		homeDir = os.ExpandEnv("$HOME/.forumapp")
 	}
 
 	config := cfg.DefaultConfig()
@@ -44,11 +44,11 @@ func main() {
 		log.Fatalf("failed to read config: %v", err)
 	}
 
-	db, err := db.NewGoLevelDB(filepath.Join(homeDir, "forum-db"), ".")
+	store, err := db.NewGoLevelDB(filepath.Join(homeDir, "forum-db"), ".")
 	if err != nil {
 		log.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer store.Close()
 
 	dbPath := "forum-db"
 	appConfigPath := "app.toml"
@@ -108,25 +108,6 @@ func main() {
 			return
 		}
 
-		// Retrieve the messages for the given public key
-		/*pubkeyBytes, err := base64.StdEncoding.DecodeString(pubkey)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to decode pubkey: %v", err), http.StatusBadRequest)
-			return
-		}
-		messages, err := app.DB.GetMessagesByPubKey(pubkeyBytes)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to get messages: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Marshal the messages to JSON and send as the response
-		respBytes, err := json.Marshal(messages)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to marshal messages: %v", err), http.StatusInternalServerError)
-			return
-		}*/
-
 		w.Header().Set("Content-Type", "application/json")
 		//w.Write(respBytes)
 	})
@@ -138,10 +119,6 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
-
-	if err := node.Stop(); err != nil {
-		log.Fatalf("failed to stop CometBFT node: %v", err)
-	}
 
 	fmt.Println("Forum application stopped")
 }
