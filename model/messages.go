@@ -101,11 +101,13 @@ func ParseMessage(tx []byte) (*Message, error) {
 		key := kv[0]
 		value := kv[1]
 
-		switch key {
+		switch strings.ToLower(key) {
 		case "sender":
 			msg.Sender = value
 		case "message":
 			msg.Message = value
+		case "history":
+			return nil, fmt.Errorf("reserved key name: %s", key)
 		default:
 			return nil, fmt.Errorf("unknown key in message: %s", key)
 		}

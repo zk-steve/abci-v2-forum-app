@@ -119,8 +119,9 @@ func (app *ForumApp) CheckTx(_ context.Context, req *abci.CheckTxRequest) (*abci
 	msg, err := model.ParseMessage(req.Tx)
 	if err != nil {
 		fmt.Printf("failed to parse transaction message req: %v\n", err)
-		return &abci.CheckTxResponse{Code: CodeTypeInvalidTxFormat, Log: "Invalid transaction format"}, nil
+		return &abci.CheckTxResponse{Code: CodeTypeInvalidTxFormat, Log: "Invalid transaction", Info: err.Error()}, nil
 	}
+
 	fmt.Println("Searching for sender ... ", msg.Sender)
 	u, err := app.state.DB.FindUserByName(msg.Sender)
 
