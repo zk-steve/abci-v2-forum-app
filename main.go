@@ -100,17 +100,6 @@ func main() {
 	}()
 
 	httpAddr := "127.0.0.1:8080"
-	http.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
-		// Extract the public key from the request URL
-		pubkey := r.URL.Query().Get("pubkey")
-		if pubkey == "" {
-			http.Error(w, "missing pubkey parameter", http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		//w.Write(respBytes)
-	})
 
 	if err := http.ListenAndServe(httpAddr, nil); err != nil {
 		log.Fatalf("failed to start HTTP server: %v", err)
