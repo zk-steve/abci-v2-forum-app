@@ -1,6 +1,7 @@
 ## Introduction
 
 This repository hosts the ABCI 2.0 Forum Application, which is explained in the CometBFT documentation [tutorial].
+
 ## Forum Application
 
 The **ABCI 2.0 Forum Application** is a place where users can come and post messages in a forum running on a 

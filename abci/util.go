@@ -28,7 +28,7 @@ func (app *ForumApp) getValidators() ([]types.ValidatorUpdate, error) {
 }
 
 func (app *ForumApp) updateValidator(v types.ValidatorUpdate) error {
-	pubKey, err := cryptoencoding.PubKeyFromProto(v.PubKey)
+	pubKey, err := cryptoencoding.PubKeyFromTypeAndBytes(v.PubKeyType, v.PubKeyBytes)
 	if err != nil {
 		return fmt.Errorf("can't decode public key: %w", err)
 	}
@@ -42,7 +42,7 @@ func (app *ForumApp) updateValidator(v types.ValidatorUpdate) error {
 	if err = app.state.DB.Set(key, value.Bytes()); err != nil {
 		return err
 	}
-	app.valAddrToPubKeyMap[string(pubKey.Address())] = v.PubKey
+	app.valAddrToPubKeyMap[string(pubKey.Address())] = pubKey
 	return nil
 }
 

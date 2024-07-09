@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"github.com/cometbft/abci-v2-forum-app/model"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cryptoproto "github.com/cometbft/cometbft/api/cometbft/crypto/v1"
 	cryptoencoding "github.com/cometbft/cometbft/crypto/encoding"
 
 	"github.com/cometbft/cometbft/version"
@@ -22,7 +22,7 @@ const CurseWordsLimitVE = 10
 
 type ForumApp struct {
 	abci.BaseApplication
-	valAddrToPubKeyMap map[string]cryptoproto.PublicKey
+	valAddrToPubKeyMap map[string]crypto.PublicKey
 	CurseWords         string
 	state              AppState
 	onGoingBlock       *badger.Txn
@@ -49,7 +49,7 @@ func NewForumApp(dbDir string, appConfigPath string) (*ForumApp, error) {
 	}
 	return &ForumApp{
 		state:              state,
-		valAddrToPubKeyMap: make(map[string]cryptoproto.PublicKey),
+		valAddrToPubKeyMap: make(map[string]crypto.PublicKey),
 		CurseWords:         cfg.CurseWords,
 	}, nil
 
@@ -65,12 +65,12 @@ func (app *ForumApp) Info(_ context.Context, info *abci.InfoRequest) (*abci.Info
 			return nil, err
 		}
 		for _, v := range validators {
-			pubKey, err := cryptoencoding.PubKeyFromProto(v.PubKey)
+			pubKey, err := cryptoencoding.PubKeyFromTypeAndBytes(v.PubKeyType, v.PubKeyBytes)
 			if err != nil {
 				return nil, fmt.Errorf("can't decode public key: %w", err)
 			}
 
-			app.valAddrToPubKeyMap[string(pubKey.Address())] = v.PubKey
+			app.valAddrToPubKeyMap[string(pubKey.Address())] = pubKey
 		}
 	}
 	return &abci.InfoResponse{
