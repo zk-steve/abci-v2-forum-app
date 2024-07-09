@@ -1,8 +1,8 @@
 module github.com/cometbft/abci-v2-forum-app
 
-go 1.22.2
+go 1.22.5
 
-toolchain go1.22.4
+toolchain go1.22
 
 require (
 	github.com/BurntSushi/toml v1.4.0

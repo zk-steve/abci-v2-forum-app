@@ -95,7 +95,7 @@ func main() {
 		log.Fatalf("failed to start CometBFT node: %v", err)
 	}
 	defer func() {
-		node.Stop()
+		_ = node.Stop()
 		node.Wait()
 	}()
 
