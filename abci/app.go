@@ -175,6 +175,11 @@ func (app *ForumApp) PrepareProposal(_ context.Context, req *abci.PrepareProposa
 	// Get the curse words from the vote extensions
 	voteExtensionCurseWords := app.getWordsFromVe(req.LocalLastCommit.Votes)
 
+	curseWords := strings.Split(string(voteExtensionCurseWords), "|")
+	if hasDuplicateWords(curseWords) {
+		return nil, errors.New("duplicate words found")
+	}
+
 	// Prepare req puts the BanTx first, then adds the other transactions
 	// ProcessProposal should verify this
 	proposedTxs := make([][]byte, 0)
@@ -358,16 +363,12 @@ func (app *ForumApp) VerifyVoteExtension(_ context.Context, req *abci.VerifyVote
 		// we do not have a validator with this address mapped; this should never happen
 		return nil, fmt.Errorf("unknown validator")
 	}
+
 	curseWords := strings.Split(string(req.VoteExtension), "|")
-	tmpCurseWordMap := make(map[string]struct{})
-	// Verify that we do not have double words and the validator is not trying to cheat us
-	for _, word := range curseWords {
-		tmpCurseWordMap[word] = struct{}{}
-	}
-	if len(tmpCurseWordMap) < len(curseWords) {
-		// Extension repeats words
+	if hasDuplicateWords(curseWords) {
 		return &abci.VerifyVoteExtensionResponse{Status: abci.VERIFY_VOTE_EXTENSION_STATUS_REJECT}, nil
 	}
+
 	// ensure vote extension curse words limit has not been exceeded
 	if len(curseWords) > CurseWordsLimitVE {
 		return &abci.VerifyVoteExtensionResponse{Status: abci.VERIFY_VOTE_EXTENSION_STATUS_REJECT}, nil
@@ -408,4 +409,15 @@ func (app *ForumApp) getWordsFromVe(voteExtensions []abci.ExtendedVoteInfo) stri
 	}
 	return voteExtensionCurseWords
 
+}
+
+// hasDuplicateWords detects if there are duplicate words in the slice
+func hasDuplicateWords(words []string) bool {
+	wordMap := make(map[string]struct{})
+
+	for _, word := range words {
+		wordMap[word] = struct{}{}
+	}
+
+	return len(words) != len(wordMap)
 }
